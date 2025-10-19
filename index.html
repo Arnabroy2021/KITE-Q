@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kite AI — True / False Quiz</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--accent:#7c3aed;--correct:#16a34a;--wrong:#ef4444}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; margin:0; padding:32px; background:linear-gradient(180deg,#071124 0%,#081129 100%); color:#e6eef8}
+    .container{max-width:920px;margin:0 auto}
+    h1{font-size:24px;margin:0 0 8px}
+    p.lead{color:var(--muted);margin:0 0 20px}
+    .card{background:var(--card);border-radius:12px;padding:18px;margin-bottom:14px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .question{display:flex;justify-content:space-between;gap:12px;align-items:center}
+    .q-text{font-weight:600}
+    .buttons{display:flex;gap:8px}
+    button.tf{padding:8px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+    button.true{background:rgba(124,58,237,0.12);color:var(--accent)}
+    button.false{background:rgba(148,163,184,0.06);color:var(--muted)}
+    .result{margin-top:10px;font-weight:700}
+    .scorebar{display:flex;align-items:center;gap:12px;margin:18px 0}
+    .progress{flex:1;height:10px;background:#071227;border-radius:999px;overflow:hidden}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#06b6d4);width:0%}
+    .controls{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{background:#0b1220;border:1px solid rgba(255,255,255,0.03);padding:10px 12px;border-radius:8px;color:var(--muted);cursor:pointer}
+    .btn.primary{background:var(--accent);color:white;border:none}
+    .feedback{font-size:13px;color:var(--muted);margin-top:6px}
+    footer{margin-top:26px;color:var(--muted);font-size:13px}
+    @media (max-width:640px){body{padding:18px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kite AI — True / False Quiz</h1>
+    <p class="lead">Tap **True** or **False** for each statement. Answers and score are shown immediately and persisted locally.</p>
+
+    <div id="quiz"></div>
+
+    <div class="card">
+      <div class="scorebar">
+        <div>Score: <strong id="score">0</strong>/<span id="total">0</span></div>
+        <div class="progress" aria-hidden="true"><i id="progressInner"></i></div>
+      </div>
+      <div class="controls">
+        <button id="reset" class="btn">Reset</button>
+        <button id="reveal" class="btn">Reveal Answers</button>
+        <button id="export" class="btn primary">Export Results (JSON)</button>
+      </div>
+      <div class="feedback" id="feedback">Your answers are saved in your browser (localStorage).</div>
+    </div>
+
+    <footer>Made for Kite AI Ecosystem Map — T/F version of the 10-question quiz.</footer>
+  </div>
+
+  <script>
+  // Quiz statements (true/false) derived from the Kite AI Ecosystem article
+  const questions = [
+    {id:1, text:"Kite AI's Ecosystem Map showcases companies that enable autonomous AI agents to operate across Web2 and Web3.", answer:true},
+    {id:2, text:"Kite AI only focuses on Web3 infrastructure and ignores Web2 services.", answer:false},
+    {id:3, text:"Google provides cloud storage and deep query capabilities for agents in the Kite AI ecosystem.", answer:true},
+    {id:4, text:"Amazon's role is to provide restaking infrastructure for agent capital optimization.", answer:false},
+    {id:5, text:"LayerZero supplies cross-chain messaging to allow agents to operate across multiple blockchains.", answer:true},
+    {id:6, text:"Chainlink offers oracle services and off-chain data integration for agents.", answer:true},
+    {id:7, text:"Privy handles embedded wallet infrastructure and user authentication for easy agent delegation.", answer:true},
+    {id:8, text:"Huma Finance and restaking protocols enable agents to access financing and optimize capital efficiency.", answer:true},
+    {id:9, text:"Kite AI restricts agents to operate on a single blockchain only.", answer:false},
+    {id:10, text:"Kite AI is building an open, decentralized infrastructure layer with unified identity, payment, and governance rails.", answer:true}
+  ];
+
+  // Load saved state
+  const STORAGE_KEY = 'kite_tf_answers_v1';
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+  const quizEl = document.getElementById('quiz');
+  const scoreEl = document.getElementById('score');
+  const totalEl = document.getElementById('total');
+  const progressInner = document.getElementById('progressInner');
+
+  function render(){
+    quizEl.innerHTML = '';
+    questions.forEach((q, idx) => {
+      const card = document.createElement('div'); card.className='card';
+      const wrapper = document.createElement('div'); wrapper.className='question';
+      const qText = document.createElement('div'); qText.className='q-text'; qText.textContent = (idx+1)+'. '+q.text;
+      const buttons = document.createElement('div'); buttons.className='buttons';
+
+      const trueBtn = document.createElement('button'); trueBtn.className='tf true'; trueBtn.textContent='True';
+      const falseBtn = document.createElement('button'); falseBtn.className='tf false'; falseBtn.textContent='False';
+
+      // result area
+      const result = document.createElement('div'); result.className='result';
+
+      const applySelection = (val) => {
+        saved[q.id] = {selected:val, correct: (val===q.answer)};
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        updateUI();
+      };
+
+      trueBtn.addEventListener('click', ()=>applySelection(true));
+      falseBtn.addEventListener('click', ()=>applySelection(false));
+
+      // Visual state update
+      const selection = saved[q.id];
+      if(selection){
+        if(selection.selected === true) trueBtn.style.boxShadow = '0 6px 14px rgba(124,58,237,0.18)';
+        if(selection.selected === false) falseBtn.style.boxShadow = '0 6px 14px rgba(148,163,184,0.12)';
+        if(selection.correct) result.textContent = 'Correct ✓';
+        else { result.textContent = 'Wrong ✕'; result.style.color = 'var(--wrong)'; }
+      }
+
+      buttons.appendChild(trueBtn); buttons.appendChild(falseBtn);
+      wrapper.appendChild(qText); wrapper.appendChild(buttons);
+      card.appendChild(wrapper);
+
+      if(selection){
+        const meta = document.createElement('div'); meta.className='feedback';
+        meta.textContent = `You answered: ${selection.selected ? 'True' : 'False'} — ${selection.correct ? 'Correct' : 'Incorrect'}`;
+        card.appendChild(meta);
+      }
+
+      card.appendChild(result);
+      quizEl.appendChild(card);
+    });
+
+    updateUI();
+  }
+
+  function updateUI(){
+    const answered = Object.keys(saved).length;
+    const total = questions.length;
+    const score = Object.values(saved).filter(s=>s.correct).length;
+    scoreEl.textContent = score;
+    totalEl.textContent = total;
+    const pct = total===0 ? 0 : Math.round((score/total)*100);
+    progressInner.style.width = pct + '%';
+
+    // re-render to show per-question feedback
+    // simpler: just refresh (but keep performance ok)
+    // We'll rebuild quiz to update shadows/labels
+    // Avoid infinite loop by not calling render here if already rendering
+  }
+
+  document.getElementById('reset').addEventListener('click', ()=>{
+    if(confirm('Reset your saved answers?')){
+      localStorage.removeItem(STORAGE_KEY);
+      for(const k in saved) delete saved[k];
+      render();
+    }
+  });
+
+  document.getElementById('reveal').addEventListener('click', ()=>{
+    if(!confirm('Reveal correct answers? This will mark each question as answered in the UI.')) return;
+    questions.forEach(q=>{ saved[q.id] = {selected: q.answer, correct: true}; });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    render();
+  });
+
+  document.getElementById('export').addEventListener('click', ()=>{
+    const data = {timestamp: new Date().toISOString(), results: saved};
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'kite-quiz-results.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  // Initial render
+  render();
+  </script>
+</body>
+</html>
